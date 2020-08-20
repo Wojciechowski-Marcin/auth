@@ -1,0 +1,63 @@
+image: docker:19.03.8
+
+variables:
+  # registry
+  NPM_REGISTRY: "https://esisoj70.emea.nsn-net.net/artifactory/api/npm/npmjs-remote/"
+  PYPI_REGISTRY: "https://esisoj70.emea.nsn-net.net/artifactory/api/pypi/python-remote/simple"
+
+  # docker registry
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+
+services:
+  - docker:19.03.8-dind
+
+stages:
+  - setup
+  - lint
+  - unit test
+  - build
+
+cache:
+  untracked: true
+  key: "$CI_BUILD_REF_NAME"
+  paths:
+    - node_modules/
+
+.retry_config:
+  retry:
+    max: 2
+    when:
+      - unknown_failure
+      - api_failure
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+.auth_config:
+  extends: .retry_config
+  image: node:12.18-slim
+
+auth setup:
+  extends: .auth_config
+  stage: setup
+  script:
+    - npm install
+
+auth lint:
+  extends: .auth_config
+  stage: lint
+  script:
+    - npm run lint
+
+auth unit test:
+  extends: .auth_config
+  stage: unit test
+  coverage: '/All files\s*\|\s*\d+\.*\d*\s*/'
+  script:
+    - npm test
+
+auth build and push:
+  stage: build
+  when: manual
+  script:
+    - CONTAINER_NAME=auth ./build_and_push.sh
